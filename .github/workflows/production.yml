@@ -5,11 +5,11 @@ on:
     branches:
       - main  
 env:
-  AWS_REGION: us-east-1                   # A região que você está usando
-  ECR_REPOSITORY: lacrei-api-repo         # O nome do seu repositório no ECR
-  ECS_SERVICE: lacrei-api-task-service-2jg2efvj # O nome do seu serviço no ECS
-  ECS_CLUSTER: lacrei-ecs-cluster         # O nome do seu cluster
-  ECS_TASK_DEFINITION: .aws/task-definition.json # Vamos precisar baixar esse arquivo já já
+  AWS_REGION: us-east-1                  
+  ECR_REPOSITORY: lacrei-api        
+  ECS_SERVICE: lacrei-api-task-service-2jg2efvj 
+  ECS_CLUSTER: lacrei-ecs-cluster         
+  ECS_TASK_DEFINITION: .aws/task-definition.json #
   CONTAINER_NAME: lacrei-api-container
 
 jobs:
@@ -28,7 +28,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }} # O Segredo que você criou!
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }} 
           aws-region: ${{ env.AWS_REGION }}
       
       - name: Login to Amazon ECR
