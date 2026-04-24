@@ -9,12 +9,17 @@ app.use(express.json());
 
 app.get('/status', (req, res) => {
   res.json({
-    status: 'ok',
+    status: 'operacional e automatizado',
     environment: process.env.NODE_ENV || 'development',
     timestamp: new Date().toISOString(),
   });
 });
 
+app.get('/health', (req, res) => {
+  res.json({
+    message: 'ok',
+  });
+});
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
 });
