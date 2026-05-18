@@ -7,7 +7,7 @@ on:
 env:
   AWS_REGION: us-east-1                   
   ECR_REPOSITORY: lacrei-api-repo
-  ECS_SERVICE: lacrei-api-task-service-staging-hf6hbrob
+  ECS_SERVICE: lacrei-api-task-service-staging
   ECS_CLUSTER: lacrei-ecs-cluster        
   ECS_TASK_DEFINITION: .aws/task-definition-staging.json 
   CONTAINER_NAME: lacrei-container-staging
