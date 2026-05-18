@@ -332,3 +332,41 @@ resource "aws_ecs_service" "staging_service" {
     container_port   = 3000
   }
 }
+
+
+# ==============================================================================
+# VERSÃO 2: ARQUITETURA TLS/HTTPS PARA CENÁRIO REAL COM DOMÍNIO PROPRIO
+#
+# ==============================================================================
+
+# 1. SOLICITAÇÃO DO CERTIFICADO SSL/TLS NO AWS ACM
+# resource "aws_acm_certificate" "lacrei_cert" {
+#   domain_name       = "api.lacrei.com.br" # Domínio oficial da plataforma
+#   validation_method = "DNS"
+#   tags              = { Environment = "production" }
+# }
+
+# 2. LISTENER SECURE HTTPS (PORTA 443)
+# resource "aws_lb_listener" "https_listener" {
+#   load_balancer_arn = aws_lb.lacrei_alb.arn
+#   port              = "443"
+#   protocol          = "HTTPS"
+#   ssl_policy        = "ELBSecurityPolicy-2016-08"
+#   certificate_arn   = aws_acm_certificate.lacrei_cert.arn
+# 
+#   default_action {
+#     type             = "forward"
+#     target_group_arn = aws_lb_target_group.prod_tg.arn
+#   }
+# }
+
+# 3. IMPLEMENTAÇÃO DE REDIRECT 301 NO LISTENER HTTP (PORTA 80)
+# Se fôssemos ativar o HTTPS, o bloco "prod_listener" da seção 4 seria substituído por este:
+# default_action {
+#   type = "redirect"
+#   redirect {
+#     port        = "443"
+#     protocol    = "HTTPS"
+#     status_code = "HTTP_301"
+#   }
+# }
