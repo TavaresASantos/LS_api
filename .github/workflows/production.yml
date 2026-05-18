@@ -4,31 +4,42 @@ on:
   push:
     branches:
       - main  
+
 env:
   AWS_REGION: us-east-1                  
-  ECR_REPOSITORY: lacrei-api        
-  ECS_SERVICE: lacrei-api-task-service-production-6fuu79vv 
+  ECR_REPOSITORY: lacrei-api-repo        
+  ECS_SERVICE: lacrei-api-service-prod 
   ECS_CLUSTER: lacrei-ecs-cluster         
-  ECS_TASK_DEFINITION: .aws/task-definition.json 
-  CONTAINER_NAME: lacrei-api-container
+  ECS_TASK_DEFINITION: .aws/task-definition-prod.json 
+  CONTAINER_NAME: lacrei-container-prod
 
 jobs:
   deploy:
-    name: Deploy to ECS
+    name: Test and Deploy to ECS
     runs-on: ubuntu-latest
 
-    permissions:
-      contents: read
-      id-token: write
-
     steps:
-      - name: Checkout
+      - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      # MELHORIA: Testes rodam primeiro no mesmo fluxo. Se falhar, o deploy cancela!
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests
+        run: npm test
+  
+      # CORREÇÃO: Autenticação usando as chaves secretas que criamos
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }} 
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
       
       - name: Login to Amazon ECR
@@ -57,11 +68,11 @@ jobs:
           task-definition: ${{ env.ECS_TASK_DEFINITION }}
           container-name: ${{ env.CONTAINER_NAME }}
           image: ${{ steps.build-image.outputs.image }}
-          env-variables: |
-            ENVIRONMENT=production
+          environment-variables: |
+            NODE_ENV=production
 
       - name: Deploy Amazon ECS task definition
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.task-def.outputs.task-definition }}
           service: ${{ env.ECS_SERVICE }}

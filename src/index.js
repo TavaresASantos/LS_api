@@ -15,7 +15,7 @@ app.get('/status', (req, res) => {
   });
 });
 
-app.get('/health', (req, res) => {
+app.get('/checkEnvironment', (req, res) => {
   res.json({
     message: 'ok',
   });
