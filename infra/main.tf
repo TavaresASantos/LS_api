@@ -1,4 +1,4 @@
-# 1. CONFIGURAÇÃO DO PROVIDER
+# 1. CONFIGURAÇÃO DO PROVIDER E REPOSITÓRIO ECR
 terraform {
   required_providers {
     aws = {
@@ -10,6 +10,16 @@ terraform {
 
 provider "aws" {
   region = "us-east-1" # Região padrão do seu projeto
+}
+
+# NOVO: Criação automática do repositório ECR na conta nova
+resource "aws_ecr_repository" "lacrei_repo" {
+  name                 = "lacrei-api-repo"
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true # Escaneia a imagem contra vulnerabilidades (DevSecOps)
+  }
 }
 
 # 2. REDE (VPC E SUBRETS MULTI-AZ)
@@ -25,19 +35,19 @@ resource "aws_internet_gateway" "gw" {
 }
 
 resource "aws_subnet" "pub_1" {
-  vpc_id            = aws_vpc.lacrei_vpc.id
-  cidr_block        = "10.0.1.0/24"
-  availability_zone = "us-east-1a"
+  vpc_id                  = aws_vpc.lacrei_vpc.id
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = "us-east-1a"
   map_public_ip_on_launch = true
-  tags              = { Name = "lacrei-pub-1" }
+  tags                    = { Name = "lacrei-pub-1" }
 }
 
 resource "aws_subnet" "pub_2" {
-  vpc_id            = aws_vpc.lacrei_vpc.id
-  cidr_block        = "10.0.2.0/24"
-  availability_zone = "us-east-1b"
+  vpc_id                  = aws_vpc.lacrei_vpc.id
+  cidr_block              = "10.0.2.0/24"
+  availability_zone       = "us-east-1b"
   map_public_ip_on_launch = true
-  tags              = { Name = "lacrei-pub-2" }
+  tags                    = { Name = "lacrei-pub-2" }
 }
 
 resource "aws_route_table" "rt" {
@@ -60,8 +70,8 @@ resource "aws_route_table_association" "b" {
 
 # 3. SECURITY GROUPS (ISOLAMENTO DE REDE)
 resource "aws_security_group" "alb_sg" {
-  name        = "lacrei-alb-sg"
-  vpc_id      = aws_vpc.lacrei_vpc.id
+  name   = "lacrei-alb-sg"
+  vpc_id = aws_vpc.lacrei_vpc.id
 
   ingress {
     from_port   = 80
@@ -86,8 +96,8 @@ resource "aws_security_group" "alb_sg" {
 }
 
 resource "aws_security_group" "ecs_sg" {
-  name        = "lacrei-ecs-sg"
-  vpc_id      = aws_vpc.lacrei_vpc.id
+  name   = "lacrei-ecs-sg"
+  vpc_id = aws_vpc.lacrei_vpc.id
 
   ingress {
     from_port       = 3000
@@ -197,29 +207,28 @@ resource "aws_cloudwatch_log_group" "ecs_logs" {
   retention_in_days = 7
 }
 
-# 6. ECS CLUSTER E TASK DEFINITIONS (COM FORMALIZAÇÃO DE LIMITES E HEALTHCHECK)
+# 6. ECS CLUSTER E TASK DEFINITIONS
 resource "aws_ecs_cluster" "lacrei_cluster" {
   name = "lacrei-ecs-cluster"
 }
 
-# TASK DE PRODUÇÃO
+# TASK DE PRODUÇÃO (REFERENCIANDO O ECR DINAMICAMENTE)
 resource "aws_ecs_task_definition" "prod_task" {
   family                   = "lacrei-api-task-service-production"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  cpu                      = "512"  # 0.5 vCPU
-  memory                   = "1024" # 1GB RAM -> EVITA O ERRO 137
+  cpu                      = "512"
+  memory                   = "1024"
   execution_role_arn       = aws_iam_role.ecs_execution_role.arn
 
   container_definitions = jsonencode([{
     name      = "lacrei-container-prod"
-    image     = "NGINX_OR_YOUR_ECR_IMAGE_URL_HERE" # Substitua pela sua imagem do ECR se quiser rodar direto
+    image     = "${aws_ecr_repository.lacrei_repo.repository_url}:latest" # DINÂMICO
     essential = true
     portMappings = [{
       containerPort = 3000
       hostPort      = 3000
     }]
-    # MELHORIA: HEALTH CHECK FORMALIZADO NO CONTAINER
     healthCheck = {
       command  = ["CMD-SHELL", "curl -f http://localhost:3000/status || exit 1"]
       interval = 30
@@ -237,7 +246,7 @@ resource "aws_ecs_task_definition" "prod_task" {
   }])
 }
 
-# TASK DE STAGING
+# TASK DE STAGING (REFERENCIANDO O ECR DINAMICAMENTE)
 resource "aws_ecs_task_definition" "staging_task" {
   family                   = "lacrei-api-task-service-staging"
   network_mode             = "awsvpc"
@@ -248,7 +257,7 @@ resource "aws_ecs_task_definition" "staging_task" {
 
   container_definitions = jsonencode([{
     name      = "lacrei-container-staging"
-    image     = "NGINX_OR_YOUR_ECR_IMAGE_URL_HERE" 
+    image     = "${aws_ecr_repository.lacrei_repo.repository_url}:latest" # DINÂMICO
     essential = true
     portMappings = [{
       containerPort = 3000
@@ -273,14 +282,13 @@ resource "aws_ecs_task_definition" "staging_task" {
 
 # 7. SERVICES COM CIRCUIT BREAKER (ROLLBACK AUTOMÁTICO)
 resource "aws_ecs_service" "prod_service" {
-  name            = "lacrei-api-service-prod"
-  cluster         = aws_ecs_cluster.lacrei_cluster.id
-  task_definition = aws_ecs_task_definition.prod_task.arn
-  desired_count   = 2 # Alta disponibilidade (Multi-AZ)
-  launch_type     = "FARGATE"
+  name                              = "lacrei-api-service-prod"
+  cluster                           = aws_ecs_cluster.lacrei_cluster.id
+  task_definition                   = aws_ecs_task_definition.prod_task.arn
+  desired_count                     = 2
+  launch_type                       = "FARGATE"
   health_check_grace_period_seconds = 300
 
-  # MELHORIA: DEPLOYMENT CIRCUIT BREAKER PARA ROLLBACK AUTOMÁTICO
   deployment_circuit_breaker {
     enable   = true
     rollback = true
@@ -300,11 +308,11 @@ resource "aws_ecs_service" "prod_service" {
 }
 
 resource "aws_ecs_service" "staging_service" {
-  name            = "lacrei-api-service-staging"
-  cluster         = aws_ecs_cluster.lacrei_cluster.id
-  task_definition = aws_ecs_task_definition.staging_task.arn
-  desired_count   = 2
-  launch_type     = "FARGATE"
+  name                              = "lacrei-api-service-staging"
+  cluster                           = aws_ecs_cluster.lacrei_cluster.id
+  task_definition                   = aws_ecs_task_definition.staging_task.arn
+  desired_count                     = 2
+  launch_type                       = "FARGATE"
   health_check_grace_period_seconds = 300
 
   deployment_circuit_breaker {
